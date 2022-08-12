@@ -1,6 +1,9 @@
 package mx.kenzie.pluto;
 
-import java.io.*;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 public interface Stored {
     
@@ -13,13 +16,13 @@ public interface Stored {
     }
     
     @FunctionalInterface
-    interface Serialiser<Type> {
-        void run(Type thing, DataInputStream stream, Pluto pluto);
+    interface Serialiser {
+        void run(Object thing, DataOutputStream stream, Pluto pluto);
     }
     
     @FunctionalInterface
-    interface Deserialiser<Type> {
-        void run(Type thing, DataOutputStream stream, Pluto pluto);
+    interface Deserialiser {
+        void run(Object thing, DataInputStream stream, Pluto pluto);
     }
     
     

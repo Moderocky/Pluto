@@ -4,7 +4,7 @@ import mx.kenzie.pluto.Pluto;
 import org.junit.Test;
 
 public class ClashCodeTest {
-
+    
     @Test
     public void test() {
         final Pluto pluto = new Pluto();
