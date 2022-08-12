@@ -8,6 +8,7 @@
     <artifactId>pluto</artifactId>
     <version>1.0.0</version>
     <name>Pluto</name>
+    <description>A low-memory serialiser system that prioritises speed.</description>
 
     <properties>
         <maven.compiler.source>17</maven.compiler.source>

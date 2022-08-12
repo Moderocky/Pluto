@@ -1,5 +1,7 @@
 package mx.kenzie.pluto;
 
+import sun.misc.Unsafe;
+
 import java.io.*;
 import java.util.HashMap;
 import java.util.Map;
@@ -27,7 +29,10 @@ public class Pluto {
     }
     
     public void serialise(Object object, OutputStream output) {
-        final DataOutputStream stream = (output instanceof DataOutputStream data) ? data : new DataOutputStream(output);
+        this.serialise(object, new DataOutputStream(output));
+    }
+    
+    public void serialise(Object object, DataOutputStream stream) {
         final Stored.Serialiser serialiser = this.getSerialiser(object.getClass());
         if (serialiser == null) return; // todo error
         serialiser.run(object, stream, this);
@@ -38,11 +43,13 @@ public class Pluto {
     }
     
     public void deserialise(Object object, InputStream input) {
-        final DataInputStream stream = (input instanceof DataInputStream data) ? data : new DataInputStream(input);
+        this.deserialise(object, new DataInputStream(input));
+    }
+    
+    public void deserialise(Object object, DataInputStream stream) {
         final Stored.Deserialiser deserialiser;
         try {
             final short clash = stream.readShort();
-            assert clash == this.clashCode(object.getClass());
             deserialiser = this.getDeserialiser(clash);
         } catch (IOException ex) {
             throw new RuntimeException("Failed to verify type.");
@@ -51,26 +58,13 @@ public class Pluto {
         deserialiser.run(object, stream, this);
     }
     
-    public short clashCode(Class<?> type) {
-        final Short value = reverse.get(type);
-        if (value == null) {
-            short code = this.code(type);
-            while (map.containsKey(code)) code++;
-            this.map.put(code, type);
-            this.reverse.put(type, code);
-            return code;
-        } else return value;
-    }
-    
     public Stored.Deserialiser getDeserialiser(short s) {
         final Class<?> type = map.get(s);
         return deserialisers.get(type);
     }
     
-    protected short code(Class<?> type) {
-        short s = (short) (type.hashCode() * 17);
-        s ^= type.hashCode() >> 16;
-        return s;
+    public void deserialise(Object object, byte[] bytes) {
+        this.deserialise(object, new DataInputStream(new ByteArrayInputStream(bytes)));
     }
     
     public Stored.Deserialiser getDeserialiser(Class<?> type) {
@@ -94,6 +88,12 @@ public class Pluto {
         return code;
     }
     
+    protected short code(Class<?> type) {
+        short s = (short) (type.hashCode() * 17);
+        s ^= type.hashCode() >> 16;
+        return s;
+    }
+    
     @SuppressWarnings("unchecked")
     public <Type, Thing extends Stored.Serialiser & Stored.Deserialiser>
     short writeSerialiser(Class<Type> type, boolean readPrivate) {
@@ -108,9 +108,34 @@ public class Pluto {
         return code;
     }
     
+    public short clashCode(Class<?> type) {
+        final Short value = reverse.get(type);
+        if (value == null) {
+            short code = this.code(type);
+            while (map.containsKey(code)) code++;
+            this.map.put(code, type);
+            this.reverse.put(type, code);
+            return code;
+        } else return value;
+    }
+    
     protected void register0(Class<?> type, Stored.Serialiser serialiser, Stored.Deserialiser deserialiser) {
         this.serialisers.put(type, serialiser);
         this.deserialisers.put(type, deserialiser);
+    }
+    
+    @SuppressWarnings("unchecked")
+    public <Type, Thing extends Stored.Serialiser & Stored.Deserialiser>
+    short writeUnsafeSerialiser(Class<Type> type, boolean readPrivate, Unsafe unsafe) {
+        final short code = this.clashCode(type);
+        final UnsafeSerialiser serialiser = new UnsafeSerialiser(type, this, unsafe);
+        serialiser.prepareFields(readPrivate);
+        serialiser.writeConstructor();
+        serialiser.writeSerialiser();
+        serialiser.writeDeserialiser();
+        final Thing thing = (Thing) serialiser.create();
+        this.register0(type, thing, thing);
+        return code;
     }
     
 }

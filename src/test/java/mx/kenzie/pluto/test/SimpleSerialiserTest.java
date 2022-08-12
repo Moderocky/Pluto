@@ -7,6 +7,7 @@ import org.junit.Test;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
+import java.io.Serializable;
 
 public class SimpleSerialiserTest {
     
@@ -54,7 +55,7 @@ public class SimpleSerialiserTest {
         input.close();
     }
     
-    public static class Person {
+    public static class Person implements Serializable {
         public String name;
         public int age;
         protected short hands;

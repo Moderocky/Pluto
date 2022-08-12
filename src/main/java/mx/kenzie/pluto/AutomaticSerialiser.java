@@ -1,54 +1,49 @@
 package mx.kenzie.pluto;
 
-import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Type;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
-class AutomaticSerialiser {
+class AutomaticSerialiser extends Marshalling {
     
     private static final String[] SERIALISERS = {Type.getInternalName(Stored.Serialiser.class), Type.getInternalName(Stored.Deserialiser.class)};
-    
-    protected final Pluto pluto;
-    protected final Class<?> type;
-    protected final ClassWriter writer;
-    protected final String internal, location;
-    protected final Set<Field> fields = new LinkedHashSet<>();
+    private static final AtomicInteger COUNTER = new AtomicInteger();
     
     protected AutomaticSerialiser(Class<?> type, Pluto pluto) {
-        this.type = type;
-        this.pluto = pluto;
-        this.writer = new ClassWriter(0);
-        this.location = Type.getInternalName(type);
-        this.internal = location + "$Serialiser";
+        super(pluto, type);
+        try {
+            Class.forName(type.getName() + "$Serialiser"); // check for collision
+            this.key = "Serialiser";
+        } catch (ClassNotFoundException ex) {
+            this.key = "Serialiser" + COUNTER.incrementAndGet(); // won't collide, counter is global
+        }
+        this.internal = location + '$' + key;
         this.writer.visit(61, 0x0001 | 0x0010 | 0x1000 | 0x0020, internal, null, "java/lang/Object", SERIALISERS);
         this.writer.visitNestHost(location);
-        this.writer.visitInnerClass(internal, location, "Serialiser", 0x0001 | 0x0008);
+        this.writer.visitInnerClass(internal, location, key, 0x0001 | 0x0008);
     }
     
+    @Override
     public void prepareFields(boolean all) {
         for (final Field field : type.getFields()) {
             final int modifiers = field.getModifiers();
-            if ((modifiers & 0x00000008) != 0) continue; // static
-            if ((modifiers & 0x00000080) != 0) continue; // transient
-            this.fields.add(field);
+            if (verify(modifiers)) fields.add(field);
         }
         if (!all) return;
         Class<?> found = type;
         do {
             for (final Field field : found.getDeclaredFields()) {
                 final int modifiers = field.getModifiers();
-                if ((modifiers & 0x00000008) != 0) continue; // static
-                if ((modifiers & 0x00000080) != 0) continue; // transient
-                this.fields.add(field);
+                if (verify(modifiers)) fields.add(field);
             }
         } while ((found = type.getSuperclass()) != null && found != Object.class);
     }
     
+    @Override
     public void writeConstructor() {
         final MethodVisitor visitor = writer.visitMethod(0x00000001, "<init>", "()V", null, null);
         visitor.visitCode();
@@ -59,6 +54,7 @@ class AutomaticSerialiser {
         visitor.visitEnd();
     }
     
+    @Override
     public void writeSerialiser() {
         boolean wide = false;
         final MethodVisitor visitor = writer.visitMethod(0x00000001, "run", "(Ljava/lang/Object;Ljava/io/DataOutputStream;Lmx/kenzie/pluto/Pluto;)V", null, null);
@@ -71,13 +67,20 @@ class AutomaticSerialiser {
             final Class<?> type = field.getType();
             if (type == long.class || type == double.class) wide = true;
             if (!type.isPrimitive() && type != String.class) {
+                final Label jump = new Label();
+                visitor.visitVarInsn(25, 0); // X
+                visitor.visitFieldInsn(180, location, field.getName(), Type.getDescriptor(type)); // V
+                visitor.visitJumpInsn(198, jump);
+                visitor.visitVarInsn(25, 0); // X
+                visitor.visitFieldInsn(180, location, field.getName(), Type.getDescriptor(type)); // V
                 visitor.visitVarInsn(25, 3);
-                visitor.visitLdcInsn(Type.getObjectType(Type.getInternalName(type)));
-                visitor.visitMethodInsn(182, "mx/kenzie/pluto/Pluto", "getSerialiser", "(Ljava/lang/Class;)L" + SERIALISERS[0] + ";", false);
-                visitor.visitFieldInsn(180, location, field.getName(), Type.getDescriptor(type));
-                visitor.visitVarInsn(25, 2);
-                visitor.visitVarInsn(25, 3);
+                visitor.visitLdcInsn(Type.getObjectType(Type.getInternalName(type))); // T,P,C
+                visitor.visitMethodInsn(182, "mx/kenzie/pluto/Pluto", "getSerialiser", "(Ljava/lang/Class;)L" + SERIALISERS[0] + ";", false); // T,Q
+                visitor.visitInsn(95); // Q,V
+                visitor.visitVarInsn(25, 2); // Q,V,S
+                visitor.visitVarInsn(25, 3); // Q,V,S,P
                 visitor.visitMethodInsn(185, SERIALISERS[0], "run", "(Ljava/lang/Object;Ljava/io/DataOutputStream;Lmx/kenzie/pluto/Pluto;)V", true);
+                visitor.visitLabel(jump); // land with nothing
             } else {
                 visitor.visitVarInsn(25, 2);
                 visitor.visitVarInsn(25, 1);
@@ -100,17 +103,24 @@ class AutomaticSerialiser {
         visitor.visitEnd();
     }
     
+    @Override
     public void writeDeserialiser() {
         boolean wide = false;
         final MethodVisitor visitor = writer.visitMethod(0x00000001, "run", "(Ljava/lang/Object;Ljava/io/DataInputStream;Lmx/kenzie/pluto/Pluto;)V", null, null);
         final String input = "java/io/DataInputStream"; // clash code already came off the stack
         for (final Field field : fields) {
+            final Label next = new Label();
             final Class<?> type = field.getType();
             if (type == long.class || type == double.class) wide = true;
             if (!type.isPrimitive() && type != String.class) {
+                final Label jump = new Label();
                 visitor.visitVarInsn(25, 3);
+                visitor.visitVarInsn(25, 2); // P,S
                 visitor.visitMethodInsn(182, input, "readShort", "()S", false); // use short code to find serialiser
-                visitor.visitInsn(87); // pop - we know what this is already
+                visitor.visitJumpInsn(154, jump);
+                visitor.visitInsn(87); // pop Pluto
+                visitor.visitJumpInsn(167, next); // go next - it's null
+                visitor.visitLabel(jump);
                 visitor.visitLdcInsn(Type.getObjectType(Type.getInternalName(type)));
                 visitor.visitMethodInsn(182, "mx/kenzie/pluto/Pluto", "getDeserialiser", "(Ljava/lang/Class;)L" + SERIALISERS[1] + ";", false);
                 visitor.visitFieldInsn(180, location, field.getName(), Type.getDescriptor(type)); // assume non-primitive has a value already
@@ -132,12 +142,14 @@ class AutomaticSerialiser {
                 else if (type == boolean.class) visitor.visitMethodInsn(182, input, "readBoolean", "()Z", false);
                 visitor.visitFieldInsn(181, location, field.getName(), Type.getDescriptor(type));
             }
+            visitor.visitLabel(next);
         }
         visitor.visitInsn(177);
         visitor.visitMaxs(wide ? 5 : 4, 4);
         visitor.visitEnd();
     }
     
+    @Override
     @SuppressWarnings("deprecation")
     public Object create() {
         try {
@@ -147,6 +159,12 @@ class AutomaticSerialiser {
         } catch (IllegalAccessException | InstantiationException ex) {
             throw new RuntimeException(ex);
         }
+    }
+    
+    private boolean verify(int modifiers) {
+        if ((modifiers & 0x00000008) != 0) return false;
+        if ((modifiers & 0x00000080) != 0) return false;
+        return (modifiers & 0x00000010) == 0;
     }
     
     
