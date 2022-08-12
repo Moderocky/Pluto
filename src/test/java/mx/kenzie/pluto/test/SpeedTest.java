@@ -37,7 +37,7 @@ public class SpeedTest {
             final long end = System.currentTimeMillis();
             System.out.println("Pluto took " + (end - start) + " millis to serialise 1000000 objects.");
         }
-        pluto.writeUnsafeSerialiser(Thing.class, true, null);
+        pluto.writeUnsafeSerialiser(Thing.class, null);
         for (int i = 0; i < 10000; i++) {
             unsafe();
         }

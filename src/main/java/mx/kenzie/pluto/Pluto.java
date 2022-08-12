@@ -126,10 +126,10 @@ public class Pluto {
     
     @SuppressWarnings("unchecked")
     public <Type, Thing extends Stored.Serialiser & Stored.Deserialiser>
-    short writeUnsafeSerialiser(Class<Type> type, boolean readPrivate, Unsafe unsafe) {
+    short writeUnsafeSerialiser(Class<Type> type, Unsafe unsafe) {
         final short code = this.clashCode(type);
         final UnsafeSerialiser serialiser = new UnsafeSerialiser(type, this, unsafe);
-        serialiser.prepareFields(readPrivate);
+        serialiser.prepareFields(true);
         serialiser.writeConstructor();
         serialiser.writeSerialiser();
         serialiser.writeDeserialiser();

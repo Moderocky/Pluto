@@ -17,7 +17,7 @@ public class UnsafeSerialiserTest {
         person.age = 37;
         person.hands = 3;
         final Pluto pluto = new Pluto();
-        pluto.writeUnsafeSerialiser(Person.class, true, null);
+        pluto.writeUnsafeSerialiser(Person.class, null);
         final ByteArrayOutputStream stream = new ByteArrayOutputStream();
         pluto.serialise(person, stream);
         final byte[] bytes = stream.toByteArray();
