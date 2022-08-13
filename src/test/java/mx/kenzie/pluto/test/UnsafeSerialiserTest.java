@@ -30,9 +30,43 @@ public class UnsafeSerialiserTest {
         assert result.hands == 3;
     }
     
+    @Test
+    public void record() {
+        final ResourceKey key = new ResourceKey("test", "key");
+        assert key.toString().equals("test:key");
+        final Pluto pluto = new Pluto();
+        final byte[] code = pluto.writeUnsafeSerialiser(ResourceKey.class, null);
+        assert code.length > 0;
+        final ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        pluto.serialise(key, stream);
+        final byte[] bytes = stream.toByteArray();
+        final DataInputStream input = new DataInputStream(new ByteArrayInputStream(bytes));
+        final ResourceKey result = new ResourceKey("hello", "there");
+        assert result.toString().equals("hello:there");
+        pluto.deserialise(result, input);
+        assert result.toString().equals("test:key");
+        
+    }
+    
     public static class Person implements Serializable {
         public String name;
         public int age;
         protected short hands;
     }
+    
+    public record ResourceKey(String namespace, String key) {
+        
+        public ResourceKey {
+            assert namespace != null && !namespace.isEmpty() : "Provider was empty.";
+            assert key != null && !key.isEmpty() : "Key was empty.";
+        }
+        
+        @Override
+        public String toString() {
+            return namespace + ':' + key;
+        }
+        
+        
+    }
 }
+

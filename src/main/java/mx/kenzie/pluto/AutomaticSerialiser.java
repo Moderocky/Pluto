@@ -40,7 +40,7 @@ class AutomaticSerialiser extends Marshalling {
                 final int modifiers = field.getModifiers();
                 if (verify(modifiers)) fields.add(field);
             }
-        } while ((found = type.getSuperclass()) != null && found != Object.class);
+        } while ((found = type.getSuperclass()) != null && found != Object.class && found != Record.class);
     }
     
     @Override
@@ -152,6 +152,7 @@ class AutomaticSerialiser extends Marshalling {
     @Override
     @SuppressWarnings("deprecation")
     public Object create() {
+        this.bytecode = writer.toByteArray();
         try {
             final MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(type, MethodHandles.lookup());
             final Class<?> thing = lookup.defineClass(writer.toByteArray());

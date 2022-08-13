@@ -9,6 +9,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class UnsafeSerialiser extends Marshalling {
@@ -46,7 +47,7 @@ public class UnsafeSerialiser extends Marshalling {
                 if ((modifiers & 0x00000080) != 0) continue; // transient
                 this.fields.add(field);
             }
-        } while ((found = type.getSuperclass()) != null && found != Object.class);
+        } while ((found = type.getSuperclass()) != null && found != Object.class && found != Record.class);
     }
     
     @Override
@@ -226,10 +227,9 @@ public class UnsafeSerialiser extends Marshalling {
     
     @Override
     public Object create() {
-        final long[] offsets = new long[fields.size()];
+        final long[] offsets = FindUnsafe.fieldOffsets(fields);
+        this.bytecode = writer.toByteArray();
         Class<?> thing = null;
-        int index = 0;
-        for (final Field field : fields) offsets[index++] = unsafe.objectFieldOffset(field);
         try {
             final MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(type, MethodHandles.lookup());
             thing = lookup.defineClass(writer.toByteArray());
@@ -263,6 +263,24 @@ class FindUnsafe {
             throw new Error("Unable to find Java's unsafe.", ex);
         }
     }
+    
+    static long[] fieldOffsets(Set<Field> fields) {
+        final long[] offsets = new long[fields.size()];
+        int index = 0, length = 12;
+        for (final Field field : fields) {
+            if (field.getDeclaringClass().isRecord()) {
+                offsets[index++] = length;
+                final Class<?> type = field.getType();
+                if (!type.isPrimitive()) length += 4;
+                else if (type == long.class || type == double.class) length += 8;
+                else if (type == int.class || type == float.class) length += 4;
+                else if (type == char.class || type == short.class) length += 2;
+                else length += 1;
+            } else offsets[index++] = UNSAFE.objectFieldOffset(field);
+        }
+        return offsets;
+    }
+    
     
     static Unsafe getUnsafe() {
         return UNSAFE;

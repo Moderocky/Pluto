@@ -18,7 +18,9 @@ public class SimpleSerialiserTest {
         person.age = 37;
         person.hands = 3;
         final Pluto pluto = new Pluto();
-        final short clash = pluto.writeSerialiser(Person.class, false);
+        final byte[] code = pluto.writeSerialiser(Person.class, false);
+        assert code.length > 0;
+        final short clash = pluto.clashCode(Person.class);
         final ByteArrayOutputStream stream = new ByteArrayOutputStream();
         pluto.serialise(person, stream);
         final byte[] bytes = stream.toByteArray();

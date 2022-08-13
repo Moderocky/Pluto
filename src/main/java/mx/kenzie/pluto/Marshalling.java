@@ -16,6 +16,7 @@ public abstract class Marshalling {
     protected final Set<Field> fields = new LinkedHashSet<>();
     protected String internal;
     protected String key;
+    protected byte[] bytecode;
     
     protected Marshalling(Pluto pluto, Class<?> type) {
         this.pluto = pluto;

@@ -94,10 +94,16 @@ public class Pluto {
         return s;
     }
     
+    /**
+     * Writes a regular serialiser for the class, assuming it is accessible.
+     * Each field will be read/written to normally.
+     * Returns the bytecode for the serialiser, for programs that may wish to reuse it.
+     */
     @SuppressWarnings("unchecked")
     public <Type, Thing extends Stored.Serialiser & Stored.Deserialiser>
-    short writeSerialiser(Class<Type> type, boolean readPrivate) {
+    byte[] writeSerialiser(Class<Type> type, boolean readPrivate) {
         final short code = this.clashCode(type);
+        assert code != 0 : "Code was equivalent to null-code?";
         final AutomaticSerialiser serialiser = new AutomaticSerialiser(type, this);
         serialiser.prepareFields(readPrivate);
         serialiser.writeConstructor();
@@ -105,7 +111,7 @@ public class Pluto {
         serialiser.writeDeserialiser();
         final Thing thing = (Thing) serialiser.create();
         this.register0(type, thing, thing);
-        return code;
+        return serialiser.bytecode;
     }
     
     public short clashCode(Class<?> type) {
@@ -124,10 +130,17 @@ public class Pluto {
         this.deserialisers.put(type, deserialiser);
     }
     
+    /**
+     * Writes an unsafe serialiser for the class.
+     * Each field will be read/written to via its heap memory pointer.
+     * Returns the bytecode for the serialiser, for programs that may wish to reuse it.
+     * This may not be reusable - field offsets are not guaranteed.
+     */
     @SuppressWarnings("unchecked")
     public <Type, Thing extends Stored.Serialiser & Stored.Deserialiser>
-    short writeUnsafeSerialiser(Class<Type> type, Unsafe unsafe) {
+    byte[] writeUnsafeSerialiser(Class<Type> type, Unsafe unsafe) {
         final short code = this.clashCode(type);
+        assert code != 0 : "Code was equivalent to null-code?";
         final UnsafeSerialiser serialiser = new UnsafeSerialiser(type, this, unsafe);
         serialiser.prepareFields(true);
         serialiser.writeConstructor();
@@ -135,7 +148,7 @@ public class Pluto {
         serialiser.writeDeserialiser();
         final Thing thing = (Thing) serialiser.create();
         this.register0(type, thing, thing);
-        return code;
+        return serialiser.bytecode;
     }
     
 }
